@@ -3,19 +3,26 @@ package main
 import (
 	"fmt"
 	"net"
-	"sippy/internal/core"
 	"sippy/internal/sip"
+	"sippy/internal/core"
 	"sippy/internal/web"
 )
 
 var (
-	registry    = core.NewRegistry()
-	callManager = core.NewCallManager()
+	sqliteRegistry *core.SQLiteRegistry
+	registry       *core.Registry
+	callManager    = core.NewCallManager()
 )
 
 func main() {
+	var err error
+	sqliteRegistry, err = core.NewSQLiteRegistry("sippy.db")
+	if err != nil {
+		panic(err)
+	}
+	registry = core.NewRegistryWithSQLite(sqliteRegistry)
 	go runSIPServer()
-	go web.StartWebUI()
+	go web.StartWebUIWithRegistry(registry)
 	select {} // block forever
 }
 
@@ -46,9 +53,22 @@ func handleSIPMessage(conn net.PacketConn, remote net.Addr, data []byte) {
 	switch msg.Method {
 	case "REGISTER":
 		username := msg.Headers["To"]
-		registry.Register(username, remote.String())
-		fmt.Printf("Registered user: %s at %s\n", username, remote.String())
-		// TODO: Send SIP 200 OK response
+		password := msg.Headers["Password"]
+		fmt.Printf("Attempting to register user: %s, address: %s, password: %s\n", username, remote.String(), password)
+		user := registry.GetUser(username)
+		if user != nil {
+			if user.Password == password {
+				registry.Register(username, remote.String(), password)
+				fmt.Printf("User authenticated and registered: %+v\n", user)
+				// TODO: Send SIP 200 OK response
+			} else {
+				fmt.Printf("Authentication failed for user: %s\n", username)
+				// TODO: Send SIP 403 Forbidden response
+			}
+		} else {
+			fmt.Printf("User not found: %s\n", username)
+			// TODO: Send SIP 404 Not Found response
+		}
 	case "INVITE":
 		caller := msg.Headers["From"]
 		callee := msg.Headers["To"]

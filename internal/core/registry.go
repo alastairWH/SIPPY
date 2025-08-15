@@ -7,41 +7,49 @@ import (
 type User struct {
 	Username string
 	Address  string // network address
+	Password string
 }
 
 type Registry struct {
-	users map[string]*User
-	mu    sync.RWMutex
+	sqlite *SQLiteRegistry
+	mu     sync.RWMutex
 }
 
-func NewRegistry() *Registry {
-	return &Registry{users: make(map[string]*User)}
+func NewRegistryWithSQLite(sqlite *SQLiteRegistry) *Registry {
+	return &Registry{sqlite: sqlite}
 }
 
-func (r *Registry) Register(username, address string) {
+func (r *Registry) Register(username, address, password string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.users[username] = &User{Username: username, Address: address}
+	return r.sqlite.Register(username, address, password)
 }
 
 func (r *Registry) GetUser(username string) *User {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.users[username]
+	u, err := r.sqlite.GetUser(username)
+	if err != nil {
+		return nil
+	}
+	return u
 }
 
 func (r *Registry) Unregister(username string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	delete(r.users, username)
+	_ = r.sqlite.Unregister(username)
 }
 
 func (r *Registry) Users() map[string]*User {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	copy := make(map[string]*User)
-	for k, v := range r.users {
-		copy[k] = v
+	userList, err := r.sqlite.Users()
+	users := make(map[string]*User)
+	if err == nil {
+		for _, u := range userList {
+			users[u.Username] = u
+		}
 	}
-	return copy
+	return users
 }
