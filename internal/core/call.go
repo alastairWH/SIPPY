@@ -35,3 +35,13 @@ func (cm *CallManager) IsActive(caller, callee string) bool {
 	_, ok := cm.calls[caller+":"+callee]
 	return ok
 }
+
+func (cm *CallManager) Calls() map[string]*Call {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	copy := make(map[string]*Call)
+	for k, v := range cm.calls {
+		copy[k] = v
+	}
+	return copy
+}

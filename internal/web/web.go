@@ -1,24 +1,34 @@
-package main
+package web
 
 import (
 	"fmt"
 	"net/http"
-	"sippy/internal/core"
 	"sync"
+	"sippy/internal/core"
 )
 
 var (
-	webRegistry     = core.NewRegistry()
-	webCallManager  = core.NewCallManager()
-	mu              sync.Mutex
+	registry     = core.NewRegistry()
+	callManager  = core.NewCallManager()
+	mu           sync.Mutex
 )
 
-func main() {
+func StartWebUI() {
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 	http.HandleFunc("/register", registerHandler)
 	http.HandleFunc("/calls", callsHandler)
+	http.HandleFunc("/register.html", serveRegisterHTML)
+	http.HandleFunc("/calls.html", serveCallsHTML)
 	fmt.Println("Web UI running on http://localhost:8080")
 	http.ListenAndServe(":8080", nil)
+}
+
+func serveRegisterHTML(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "web/html/register.html")
+}
+
+func serveCallsHTML(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "web/html/calls.html")
 }
 
 func registerHandler(w http.ResponseWriter, r *http.Request) {
@@ -26,7 +36,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		username := r.FormValue("username")
 		if username != "" {
 			mu.Lock()
-			webRegistry.Register(username, "webui")
+			registry.Register(username, "webui")
 			mu.Unlock()
 			w.Write([]byte("<div class='container'><h1>User registered!</h1><a href='/register'>Back</a></div>"))
 			return
@@ -39,8 +49,8 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 
 func callsHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
-	users := webRegistryUsers()
-	calls := webCallManagerCalls()
+	users := registryUsers()
+	calls := callManagerCalls()
 	mu.Unlock()
 	w.Write([]byte(`<html><head><link rel='stylesheet' href='/static/style.css'></head><body><div class='container'><h1>Call Monitoring</h1><h2>Registered Users</h2><ul>`))
 	for _, u := range users {
@@ -53,70 +63,18 @@ func callsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("</ul></div></body></html>"))
 }
 
-func webRegistryUsers() []*core.User {
+func registryUsers() []*core.User {
 	users := []*core.User{}
-	for _, u := range webRegistryUsersMap() {
+	for _, u := range registry.Users() {
 		users = append(users, u)
 	}
 	return users
 }
 
-func webRegistryUsersMap() map[string]*core.User {
-	return webRegistryUsersInternal()
-}
-
-func webRegistryUsersInternal() map[string]*core.User {
-	return webRegistryUsersExported(webRegistry)
-}
-
-func webRegistryUsersExported(r *core.Registry) map[string]*core.User {
-	return rExported(r)
-}
-
-func rExported(r *core.Registry) map[string]*core.User {
-	return r.Users()
-}
-
-func (r *core.Registry) Users() map[string]*core.User {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	copy := make(map[string]*core.User)
-	for k, v := range r.users {
-		copy[k] = v
-	}
-	return copy
-}
-
-func webCallManagerCalls() []*core.Call {
+func callManagerCalls() []*core.Call {
 	calls := []*core.Call{}
-	for _, c := range webCallManagerCallsMap() {
+	for _, c := range callManager.Calls() {
 		calls = append(calls, c)
 	}
 	return calls
-}
-
-func webCallManagerCallsMap() map[string]*core.Call {
-	return webCallManagerCallsInternal()
-}
-
-func webCallManagerCallsInternal() map[string]*core.Call {
-	return webCallManagerCallsExported(webCallManager)
-}
-
-func webCallManagerCallsExported(cm *core.CallManager) map[string]*core.Call {
-	return cmExported(cm)
-}
-
-func cmExported(cm *core.CallManager) map[string]*core.Call {
-	return cm.Calls()
-}
-
-func (cm *core.CallManager) Calls() map[string]*core.Call {
-	cm.mu.RLock()
-	defer cm.mu.RUnlock()
-	copy := make(map[string]*core.Call)
-	for k, v := range cm.calls {
-		copy[k] = v
-	}
-	return copy
 }

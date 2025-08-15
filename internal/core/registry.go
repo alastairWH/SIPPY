@@ -35,3 +35,13 @@ func (r *Registry) Unregister(username string) {
 	defer r.mu.Unlock()
 	delete(r.users, username)
 }
+
+func (r *Registry) Users() map[string]*User {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	copy := make(map[string]*User)
+	for k, v := range r.users {
+		copy[k] = v
+	}
+	return copy
+}

@@ -5,12 +5,21 @@ import (
 	"net"
 	"sippy/internal/core"
 	"sippy/internal/sip"
+	"sippy/internal/web"
 )
 
-var registry = core.NewRegistry()
-var callManager = core.NewCallManager()
+var (
+	registry    = core.NewRegistry()
+	callManager = core.NewCallManager()
+)
 
 func main() {
+	go runSIPServer()
+	go web.StartWebUI()
+	select {} // block forever
+}
+
+func runSIPServer() {
 	addr := ":5060" // SIP default port
 	conn, err := net.ListenPacket("udp", addr)
 	if err != nil {
@@ -45,7 +54,7 @@ func handleSIPMessage(conn net.PacketConn, remote net.Addr, data []byte) {
 		callee := msg.Headers["To"]
 		callManager.StartCall(caller, callee)
 		fmt.Printf("Call started: %s -> %s\n", caller, callee)
-		// TODO: Send SIP 200 OK response and notify callee
+		// TODO: Forward INVITE to callee and send SIP 200 OK response
 	case "BYE":
 		caller := msg.Headers["From"]
 		callee := msg.Headers["To"]
